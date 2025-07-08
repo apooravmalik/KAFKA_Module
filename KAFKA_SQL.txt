@@ -1,0 +1,60 @@
+USE [KAFKA]
+GO
+/****** Object:  User [vtas]    Script Date: 08-07-2025 15:13:02 ******/
+CREATE USER [vtas] FOR LOGIN [vtas] WITH DEFAULT_SCHEMA=[dbo]
+GO
+/****** Object:  Table [dbo].[datoms_TBL]    Script Date: 08-07-2025 15:13:02 ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[datoms_TBL](
+	[id] [nvarchar](100) NOT NULL,
+	[category] [nvarchar](50) NULL,
+	[event_time] [bigint] NULL,
+	[generated_at] [bigint] NULL,
+	[rule_template_name] [nvarchar](100) NULL,
+	[message] [nvarchar](max) NULL,
+	[rule_param] [nvarchar](100) NULL,
+	[param_threshold] [nvarchar](100) NULL,
+	[param_value] [int] NULL,
+	[entity_type] [nvarchar](50) NULL,
+	[entity_id] [int] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+/****** Object:  Table [dbo].[thingsup_TBL]    Script Date: 08-07-2025 15:13:02 ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[thingsup_TBL](
+	[id] [nvarchar](100) NOT NULL,
+	[alert_id] [int] NULL,
+	[device_id] [int] NULL,
+	[device_uniqueid] [nvarchar](100) NULL,
+	[device_name] [nvarchar](100) NULL,
+	[device_time] [datetime2](7) NULL,
+	[location_lat] [float] NULL,
+	[location_long] [float] NULL,
+	[alert_name] [nvarchar](100) NULL,
+	[alert_raised_at] [datetime2](7) NULL,
+	[alert_cleared_at] [datetime2](7) NULL,
+	[alert_checked_at] [datetime2](7) NULL,
+	[event_name] [nvarchar](100) NULL,
+	[event_id] [int] NULL,
+	[event_value] [float] NULL,
+	[event_raised] [bit] NULL,
+	[event_raised_at] [datetime2](7) NULL,
+	[event_cleared_at] [datetime2](7) NULL,
+	[event_checked_at] [datetime2](7) NULL,
+	[event_type] [nvarchar](50) NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
