@@ -2,12 +2,13 @@ import os
 import json
 import socket
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from confluent_kafka import Consumer
 from config import KAFKA_CONFIG, TOPIC_DATOMS, TOPIC_ZEPTO, GROUP_ID, TCP_IP, TCP_PORT
 from database import get_db
 from models import Datoms, ThingsUp
 import json
+import pytz
 
 LOG_DIR = "logs"
 os.makedirs(LOG_DIR, exist_ok=True)
@@ -45,38 +46,50 @@ def get_topic_logger(topic_name):
 import json
 
 def parse_datoms_message(message):
-    """Parse JSON message for TOPIC_DATOMS according to database schema."""
+    """
+    Parse JSON message for TOPIC_DATOMS, extracts new fields, and converts time to IST.
+    """
     try:
         data = json.loads(message)
 
-        # Handle nested fields inside "details"
+        # Handle nested fields
         details = data.get('details', {})
+        tags = data.get('tags', {})
+        
+        # Define the Indian Standard Time timezone
+        IST = pytz.timezone('Asia/Kolkata')
 
+        # Get timestamps from the message
+        event_time_ts = data.get('time', 0)
+        generated_at_ts = details.get('generated_at', 0)
+
+        # Convert UNIX timestamps to timezone-aware datetime objects in IST.
+        # We assume the source timestamp is in UTC.
+        event_time_ist = datetime.fromtimestamp(event_time_ts, tz=timezone.utc).astimezone(IST) if event_time_ts else None
+        generated_at_ist = datetime.fromtimestamp(generated_at_ts, tz=timezone.utc).astimezone(IST) if generated_at_ts else None
+
+        # This dictionary structure matches the schema in your models.py file,
+        # storing both the original UNIX timestamp and the converted IST time.
         parsed_data = {
             'id': data.get('id', ''),
+            'code': tags.get('Code', ''),  # Extract the code from tags
             'category': data.get('category', ''),
-            'event_time': data.get('time', 0),  # Assuming 'time' is event_time
-            'generated_at': details.get('generated_at', 0),
+            'event_time': event_time_ist,
+            'generated_at': generated_at_ist,
             'rule_template_name': details.get('rule_template_name', ''),
             'message': details.get('message', ''),
             'rule_param': details.get('rule_param', ''),
-            'param_threshold': details.get('param_threshold'),  # Can be None
+            'param_threshold': details.get('param_threshold'),
             'param_value': details.get('param_value', 0),
             'entity_type': details.get('entity_type', ''),
             'entity_id': details.get('entity_id', 0)
         }
 
         print(f"[DATOMS PARSED] ID: {parsed_data['id']}")
-        print(f"[DATOMS PARSED] Category: {parsed_data['category']}")
-        print(f"[DATOMS PARSED] Event Time: {parsed_data['event_time']}")
-        print(f"[DATOMS PARSED] Generated At: {parsed_data['generated_at']}")
-        print(f"[DATOMS PARSED] Rule Template: {parsed_data['rule_template_name']}")
+        print(f"[DATOMS PARSED] Code: {parsed_data['code']}")
+        print(f"[DATOMS PARSED] Event Time (IST): {parsed_data['event_time']}")
+        print(f"[DATOMS PARSED] Generated At (IST): {parsed_data['generated_at']}")
         print(f"[DATOMS PARSED] Message: {parsed_data['message']}")
-        print(f"[DATOMS PARSED] Rule Param: {parsed_data['rule_param']}")
-        print(f"[DATOMS PARSED] Param Threshold: {parsed_data['param_threshold']}")
-        print(f"[DATOMS PARSED] Param Value: {parsed_data['param_value']}")
-        print(f"[DATOMS PARSED] Entity Type: {parsed_data['entity_type']}")
-        print(f"[DATOMS PARSED] Entity ID: {parsed_data['entity_id']}")
         print("-" * 50)
 
         return parsed_data
@@ -87,7 +100,6 @@ def parse_datoms_message(message):
     except Exception as e:
         print(f"[DATOMS PARSE ERROR] {e}")
         return None
-
 
 
 
@@ -112,10 +124,14 @@ def parse_zepto_message(message):
         # Build custom ID
         alert_id = alert.get('alertid', 0)
         event_id = event_data.get('id', 0)
-        custom_id = f"alert_{alert_id}_event_{event_id}"
+
+        # Extract first 7 letters from device name as ID
+        device_name = device.get('name', '')
+        custom_id = device_name[:7] if len(device_name) >= 7 else device_name
 
         parsed_data = {
             'id': custom_id,
+            'custom_id': custom_id,
             'alert_id': alert_id,
             'device_id': device.get('id', 0),
             'device_uniqueid': device.get('uniqueid', ''),
@@ -178,6 +194,7 @@ def save_to_database(topic, message_dict):
         if topic == TOPIC_DATOMS:
             record = Datoms(
                 id=message_dict.get("id"),
+                code=message_dict.get("code"),
                 category=message_dict.get("category"),
                 event_time=message_dict.get("event_time"),
                 generated_at=message_dict.get("generated_at"),
@@ -195,6 +212,7 @@ def save_to_database(topic, message_dict):
             event_id = message_dict.get("event_id")
 
             record = ThingsUp(
+                custom_id = message_dict.get("custom_id"),
                 alert_id=alert_id,
                 device_id=message_dict.get("device_id"),
                 device_uniqueid=message_dict.get("device_uniqueid"),
@@ -240,14 +258,25 @@ def send_tcp_message(message):
 def send_tcp_for_topic(topic, parsed_data):
     """Send TCP message based on topic with ID and alert name."""
     try:
+        if not parsed_data:
+            print(f"[TCP WARNING] Parsed data is empty for topic {topic}. Skipping.")
+            return
+
+        tcp_message = ""
         if topic == TOPIC_DATOMS:
-            # For DATOMS, use the ID and category as alert name
-            tcp_msg = f"axe,{parsed_data['id']},{parsed_data['category']}@"
-            send_tcp_message(tcp_msg)
+            # For DATOMS, format is axe,{id},{message}@
+            unique_id = parsed_data.get('id', '')
+            event_name = parsed_data.get('message', '')
+            tcp_message = f"axe,{unique_id},{event_name}@"
+            send_tcp_message(tcp_message)
+
         elif topic == TOPIC_ZEPTO:
-            # For ZEPTO, use the custom ID and alert name
-            tcp_msg = f"axe,{parsed_data['id']},{parsed_data['alert_name']}@"
-            send_tcp_message(tcp_msg)
+            # For ZEPTO, format is axe,{custom_id},{alert_name}@
+            unique_id = parsed_data.get('custom_id', '')
+            event_name = parsed_data.get('alert_name', '')
+            tcp_message = f"axe,{unique_id},{event_name}@"
+            send_tcp_message(tcp_message)
+            
     except Exception as e:
         print(f"[TCP ERROR] Failed to send TCP message for {topic}: {e}")
 
@@ -264,11 +293,11 @@ def test_consumer():
     consumer.subscribe([TOPIC_ZEPTO, TOPIC_DATOMS])
 
     #for testing
-    import time
-    start_time = time.time()
+    #import time
+    #start_time = time.time()
 
     try:
-        while time.time() - start_time < 15: #add "while True:" when tested
+        while True: #add "time.time() - start_time < 15:" when testing
             msg = consumer.poll(5.0)
             if msg is None:
                 print("No messages received. Retrying...")

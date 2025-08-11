@@ -1,2 +1,6 @@
 python-dotenv
 confluent-kafka
+flask
+sqlalchemy
+pyodbc
+pytz

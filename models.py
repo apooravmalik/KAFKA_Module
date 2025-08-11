@@ -9,9 +9,10 @@ class Datoms(Base):
     __tablename__ = "datoms_TBL"
 
     id = Column(String(100), primary_key=True)
+    code = Column(String(100))
     category = Column(String(50))
-    event_time = Column(BigInteger)  # UNIX timestamp
-    generated_at = Column(BigInteger)
+    event_time = Column(DateTime)  # UNIX timestamp
+    generated_at = Column(DateTime)
     rule_template_name = Column(String(100))
     message = Column(String)  # NVARCHAR(MAX) -> String with no length restriction
     rule_param = Column(String(100))
@@ -24,8 +25,10 @@ class Datoms(Base):
 class ThingsUp(Base):
     __tablename__ = "thingsup_TBL"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id = Column(Integer, primary_key=True)
+
     alert_id = Column(Integer)
+    custom_id = Column(String(10), nullable=False)
 
     device_id = Column(Integer)
     device_uniqueid = Column(String(100))
